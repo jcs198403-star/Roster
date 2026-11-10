@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise Manpower Roster System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8fafc;
+  }
+  .badge-M { background-color: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+  .badge-G { background-color: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+  .badge-E { background-color: #fef3c7; color: #92400e; border-color: #fde68a; }
+  .badge-N { background-color: #f3e8ff; color: #6b21a8; border-color: #e9d5ff; }
+  .badge-WO { background-color: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
+  .badge-LEAVE { background-color: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .badge-EMPTY { background-color: #ffffff; color: #94a3b8; border-color: #e2e8f0; }
+
+  .status-PRESENT { color: #166534; font-weight: 600; }
+  .status-ABSENT { color: #991b1b; font-weight: 600; }
+  .status-LEAVE { color: #92400e; font-weight: 600; }
+  .status-WEEKLY_OFF { color: #4b5563; font-weight: 600; }
+  .status-HALF_DAY { color: #6b21a8; font-weight: 600; }
+
+  /* Compact dropdown select within monthly & weekly matrix cells */
+  .matrix-cell-select {
+    appearance: none;
+    -webkit-appearance: none;
+    text-align-last: center;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 2px 0;
+    width: 28px;
+    height: 24px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-style: solid;
+    outline: none;
+    transition: all 0.15s ease-in-out;
+  }
+  .matrix-cell-select:focus {
+    ring: 2px;
+    ring-color: #6366f1;
+    z-index: 20;
+  }
+
+  @media print {
+    .no-print { display: none !important; }
+    body { background-color: #fff; }
+    .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+    .matrix-container { overflow: visible !important; }
+    .matrix-cell-select { border: none !important; appearance: none !important; }
+  }
+  
+  /* Custom scrollbars */
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+</style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Header Section -->
+  <header class="bg-indigo-900 text-white shadow-md no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <i class="fa-solid fa-calendar-days text-indigo-400"></i> Manpower Roster & Attendance Manager
+        </h1>
+        <p class="text-indigo-200 text-xs mt-1">Plan shifts, manage weekly & monthly rosters, track daily attendance and generate reports.</p>
+      </div>
+      <div class="flex items-center gap-2 text-xs bg-indigo-800/60 px-3 py-2 rounded-lg border border-indigo-700">
+        <i class="fa-solid fa-database text-indigo-300"></i>
+        <span>Local Storage Engine</span>
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 ml-1"></span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-indigo-950 px-4 sm:px-6 lg:px-8 border-t border-indigo-800/50">
+      <div class="max-w-7xl mx-auto flex space-x-1 overflow-x-auto custom-scrollbar">
+        <button onclick="switchTab('daily')" id="tab-daily" class="tab-btn px-4 py-3 font-medium text-sm border-b-2 border-indigo-400 text-white flex items-center gap-2 whitespace-nowrap transition-colors">
+          <i class="fa-regular fa-clock"></i> Daily Roster & Attendance
+        </button>
+        <button onclick="switchTab('weekly')" id="tab-weekly" class="tab-btn px-4 py-3 font-medium text-sm border-b-2 border-transparent text-indigo-200 hover:text-white hover:bg-indigo-900/50 flex items-center gap-2 whitespace-nowrap transition-colors">
+          <i class="fa-solid fa-calendar-week"></i> Weekly Planner
+        </button>
+        <button onclick="switchTab('monthly')" id="tab-monthly" class="tab-btn px-4 py-3 font-medium text-sm border-b-2 border-transparent text-indigo-200 hover:text-white hover:bg-indigo-900/50 flex items-center gap-2 whitespace-nowrap transition-colors">
+          <i class="fa-regular fa-calendar-alt"></i> Monthly Matrix View
+        </button>
+        <button onclick="switchTab('employees')" id="tab-employees" class="tab-btn px-4 py-3 font-medium text-sm border-b-2 border-transparent text-indigo-200 hover:text-white hover:bg-indigo-900/50 flex items-center gap-2 whitespace-nowrap transition-colors">
+          <i class="fa-solid fa-users"></i> Employees Management
+        </button>
+        <button onclick="switchTab('shifts')" id="tab-shifts" class="tab-btn px-4 py-3 font-medium text-sm border-b-2 border-transparent text-indigo-200 hover:text-white hover:bg-indigo-900/50 flex items-center gap-2 whitespace-nowrap transition-colors">
+          <i class="fa-solid fa-business-time"></i> Shift Setup
+        </button>
+        <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn px-4 py-3 font-medium text-sm border-b-2 border-transparent text-indigo-200 hover:text-white hover:bg-indigo-900/50 flex items-center gap-2 whitespace-nowrap transition-colors">
+          <i class="fa-solid fa-sliders"></i> Data & Backup
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-xs font-medium border border-slate-700">
+    <i class="fa-solid fa-circle-check text-emerald-400 text-base" id="toastIcon"></i>
+    <span id="toastMsg">Action executed successfully</span>
+  </div>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+    <!-- 1. DAILY ROSTER & ATTENDANCE TAB -->
+    <div id="content-daily" class="tab-content space-y-6">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Daily Roster & Attendance</h2>
+            <p class="text-xs text-slate-500">Track daily coverage, assign single-day shifts, and mark live attendance.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 no-print">
+            <button onclick="exportDailyExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-file-excel"></i> Export Excel
+            </button>
+            <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-print"></i> Print View
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters Toolbar -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200 no-print">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Roster Date</label>
+            <input type="date" id="rosterDate" onchange="renderRoster()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Department Filter</label>
+            <select id="filterDepartment" onchange="renderRoster()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Shift Filter</label>
+            <select id="filterShift" onchange="renderRoster()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">All Shifts</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Attendance Status Filter</label>
+            <select id="filterStatus" onchange="renderRoster()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">All Statuses</option>
+              <option value="PRESENT">PRESENT</option>
+              <option value="ABSENT">ABSENT</option>
+              <option value="LEAVE">LEAVE</option>
+              <option value="WEEKLY_OFF">WEEKLY_OFF</option>
+              <option value="HALF_DAY">HALF_DAY</option>
+              <option value="NOT_MARKED">NOT MARKED</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dynamic Summary Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6" id="summary"></div>
+
+        <!-- Roster Data Table -->
+        <div class="overflow-x-auto border border-slate-200 rounded-lg">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+              <tr>
+                <th class="p-3">Employee</th>
+                <th class="p-3">Dept / Designation</th>
+                <th class="p-3">Assigned Shift</th>
+                <th class="p-3">Attendance Status</th>
+                <th class="p-3">Remarks</th>
+                <th class="p-3 text-center no-print">Action</th>
+              </tr>
+            </thead>
+            <tbody id="rosterTableBody" class="divide-y divide-slate-200 bg-white">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+          <div id="dailyEmptyMsg" class="hidden p-8 text-center text-slate-500 text-sm">No roster data available matching current selection.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. WEEKLY ROSTER PLANNER TAB -->
+    <div id="content-weekly" class="tab-content space-y-6 hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Weekly Roster Planner</h2>
+            <p class="text-xs text-slate-500">Schedule shifts across a full 7-day week for each staff member.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 no-print">
+            <button onclick="exportWeeklyExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-file-excel"></i> Export Week Plan
+            </button>
+            <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-print"></i> Print
+            </button>
+          </div>
+        </div>
+
+        <!-- Week Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200 no-print">
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            <label class="text-xs font-semibold text-slate-600">Select Week Starting (Monday):</label>
+            <div class="flex items-center gap-1">
+              <button onclick="navigateWeek(-7)" title="Previous Week" class="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg shadow-sm transition">
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+              <input type="date" id="weeklyStartDate" onchange="renderWeeklyRoster()" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <button onclick="navigateWeek(7)" title="Next Week" class="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg shadow-sm transition">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+            <button onclick="setThisWeek()" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold rounded-lg border border-indigo-200 transition">
+              Current Week
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-semibold text-slate-600">Dept Filter:</label>
+            <select id="weeklyDeptFilter" onchange="renderWeeklyRoster()" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Weekly Matrix Table -->
+        <div class="overflow-x-auto border border-slate-200 rounded-lg custom-scrollbar">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200" id="weeklyTableHeader">
+              <!-- Rendered dynamically -->
+            </thead>
+            <tbody id="weeklyTableBody" class="divide-y divide-slate-200 bg-white">
+              <!-- Rendered dynamically -->
+            </tbody>
+            <tfoot id="weeklyTableFooter" class="bg-slate-50 font-semibold border-t border-slate-200">
+              <!-- Rendered dynamically -->
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. MONTHLY MATRIX VIEW TAB -->
+    <div id="content-monthly" class="tab-content space-y-6 hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Monthly Roster Matrix</h2>
+            <p class="text-xs text-slate-500">Interactive monthly planner with inline cell editing and automated statistics.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 no-print">
+            <button onclick="exportMonthlyExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-file-excel"></i> Export Month Matrix
+            </button>
+            <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-print"></i> Print
+            </button>
+          </div>
+        </div>
+
+        <!-- Month Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200 no-print">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="text-xs font-semibold text-slate-600">Select Month & Year:</label>
+            <input type="month" id="monthlyYearMonth" onchange="renderMonthlyMatrix()" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-semibold text-slate-600">Dept Filter:</label>
+            <select id="monthlyDeptFilter" onchange="renderMonthlyMatrix()" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Shift Codes Legend -->
+        <div class="flex flex-wrap items-center gap-3 mb-4 text-xs font-medium text-slate-600 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200">
+          <span class="font-bold text-slate-700">Legend:</span>
+          <span class="px-2 py-0.5 rounded border badge-M">M - Morning</span>
+          <span class="px-2 py-0.5 rounded border badge-G">G - General</span>
+          <span class="px-2 py-0.5 rounded border badge-E">E - Evening</span>
+          <span class="px-2 py-0.5 rounded border badge-N">N - Night</span>
+          <span class="px-2 py-0.5 rounded border badge-WO">WO - Weekly Off</span>
+          <span class="px-2 py-0.5 rounded border badge-LEAVE">L - Leave</span>
+        </div>
+
+        <!-- Monthly Table -->
+        <div class="overflow-x-auto border border-slate-200 rounded-lg custom-scrollbar">
+          <table class="w-full text-left border-collapse text-[11px]">
+            <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200" id="monthlyTableHeader">
+              <!-- Rendered dynamically -->
+            </thead>
+            <tbody id="monthlyTableBody" class="divide-y divide-slate-200 bg-white">
+              <!-- Rendered dynamically -->
+            </tbody>
+            <tfoot id="monthlyTableFooter" class="bg-slate-50 font-semibold border-t border-slate-200">
+              <!-- Rendered dynamically -->
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. EMPLOYEES MANAGEMENT TAB -->
+    <div id="content-employees" class="tab-content space-y-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Form & Excel Import Card -->
+        <div class="space-y-6">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 h-fit">
+            <h2 class="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2" id="empFormTitle">Add New Employee</h2>
+            <form onsubmit="handleSaveEmployee(event)" class="space-y-4">
+              <input type="hidden" id="empEditId">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Employee Code *</label>
+                <input type="text" id="empCode" required placeholder="EMP-001" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name *</label>
+                <input type="text" id="empName" required placeholder="John Doe" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Department</label>
+                <input type="text" id="empDepartment" placeholder="Production / Maintenance" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Designation</label>
+                <input type="text" id="empDesignation" placeholder="Operator / Supervisor" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div class="flex gap-2 pt-2">
+                <button type="submit" id="saveEmpBtn" class="flex-1 bg-indigo-900 hover:bg-indigo-950 text-white font-semibold py-2 rounded-lg text-xs transition">
+                  Save Employee
+                </button>
+                <button type="button" onclick="resetEmployeeForm()" class="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 rounded-lg text-xs transition">
+                  Clear
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Batch Import Employees Card -->
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+            <h2 class="text-base font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center justify-between">
+              <span>Batch Excel Import</span>
+              <button onclick="downloadEmployeeTemplate()" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-file-arrow-down"></i> Template
+              </button>
+            </h2>
+            <p class="text-xs text-slate-500">Upload a spreadsheet with headers: <code class="bg-slate-100 px-1 rounded text-slate-700">Code</code>, <code class="bg-slate-100 px-1 rounded text-slate-700">Name</code>, <code class="bg-slate-100 px-1 rounded text-slate-700">Department</code>, <code class="bg-slate-100 px-1 rounded text-slate-700">Designation</code>.</p>
+            <input type="file" id="employeeExcelFile" accept=".xlsx, .xls, .csv" class="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+            <button onclick="importEmployeesExcel()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-file-import"></i> Import Employees
+            </button>
+          </div>
+        </div>
+
+        <!-- Employee Directory Table -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 lg:col-span-2">
+          <h2 class="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2 flex justify-between items-center">
+            <span>Employee Directory</span>
+            <span class="text-xs font-normal text-slate-500" id="empCountBadge">Total: 0</span>
+          </h2>
+          <div class="overflow-x-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-left border-collapse text-xs sm:text-sm">
+              <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="p-3">Code</th>
+                  <th class="p-3">Full Name</th>
+                  <th class="p-3">Department</th>
+                  <th class="p-3">Designation</th>
+                  <th class="p-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="employeeTableBody" class="divide-y divide-slate-200 bg-white">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. SHIFT SETUP TAB -->
+    <div id="content-shifts" class="tab-content space-y-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 h-fit">
+          <h2 class="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2" id="shiftFormTitle">Create / Edit Shift</h2>
+          <form onsubmit="handleSaveShift(event)" class="space-y-4">
+            <input type="hidden" id="shiftEditId">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Shift Code * (Single letter)</label>
+              <input type="text" id="shiftCode" required maxlength="3" placeholder="M / G / E / N" class="w-full uppercase border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Shift Name *</label>
+              <input type="text" id="shiftName" required placeholder="Morning Shift" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Start Time *</label>
+                <input type="time" id="shiftStart" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">End Time *</label>
+                <input type="time" id="shiftEnd" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+            </div>
+            <div class="flex gap-2 pt-2">
+              <button type="submit" id="saveShiftBtn" class="flex-1 bg-indigo-900 hover:bg-indigo-950 text-white font-semibold py-2 rounded-lg text-xs transition">
+                Save Shift
+              </button>
+              <button type="button" onclick="resetShiftForm()" class="px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 rounded-lg text-xs transition">
+                Clear
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 lg:col-span-2">
+          <h2 class="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Configured Shifts</h2>
+          <div class="overflow-x-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-left border-collapse text-xs sm:text-sm">
+              <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="p-3">Code</th>
+                  <th class="p-3">Shift Name</th>
+                  <th class="p-3">Timings</th>
+                  <th class="p-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="shiftsTableBody" class="divide-y divide-slate-200 bg-white">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. DATA & BACKUP TAB -->
+    <div id="content-settings" class="tab-content space-y-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Local Data Management Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <h2 class="text-base font-bold text-slate-800 mb-2 border-b border-slate-100 pb-2 flex items-center gap-2">
+            <i class="fa-solid fa-database text-indigo-600"></i> Database Backup & Management
+          </h2>
+          <p class="text-xs text-slate-500 mb-6">Manage local browser data storage or export full JSON backups.</p>
+          
+          <div class="space-y-4">
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h3 class="text-xs font-bold text-slate-800">Export JSON Data Backup</h3>
+                <p class="text-xs text-slate-500">Save a complete snapshot of all data to your computer.</p>
+              </div>
+              <button onclick="downloadBackup()" class="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold px-4 py-2 rounded-lg text-xs transition whitespace-nowrap">
+                <i class="fa-solid fa-download mr-1"></i> Export Backup
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+              <div>
+                <h3 class="text-xs font-bold text-slate-800">Restore JSON Data Backup</h3>
+                <p class="text-xs text-slate-500">Restore system data from a JSON backup file.</p>
+              </div>
+              <input type="file" id="restoreFile" accept=".json" class="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+              <button onclick="restoreBackup()" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg text-xs transition">
+                <i class="fa-solid fa-upload mr-1"></i> Restore Backup
+              </button>
+            </div>
+
+            <div class="p-4 bg-red-50 rounded-lg border border-red-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h3 class="text-xs font-bold text-red-800">Clear All System Data</h3>
+                <p class="text-xs text-red-600">Permanently clear local database.</p>
+              </div>
+              <button onclick="clearAllData()" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg text-xs transition whitespace-nowrap">
+                <i class="fa-solid fa-trash mr-1"></i> Clear Database
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Google Sheets Integration Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <h2 class="text-base font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center justify-between">
+            <span class="flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-600"></i> Google Sheets Cloud Sync</span>
+            <span id="syncStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">Not Connected</span>
+          </h2>
+
+          <p class="text-xs text-slate-500">Connect your roster system directly to your personal Google Sheet to auto-sync employees, shifts, rosters, and daily attendance logs.</p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Google Apps Script Web App URL</label>
+              <input type="url" id="googleScriptUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 font-mono">
+            </div>
+
+            <div class="flex gap-2">
+              <button onclick="saveGoogleScriptUrl()" class="flex-1 bg-indigo-900 hover:bg-indigo-950 text-white font-semibold py-2 rounded-lg text-xs transition">
+                <i class="fa-solid fa-floppy-disk mr-1"></i> Save URL
+              </button>
+              <button onclick="syncToGoogleSheets()" id="syncBtn" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2 rounded-lg text-xs transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-rotate"></i> Sync Data Now
+              </button>
+            </div>
+          </div>
+
+          <!-- Setup Instructions Box -->
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2 text-xs">
+            <div class="font-bold text-slate-800 flex items-center justify-between">
+              <span>Quick 2-Minute Google Sheet Setup:</span>
+              <button onclick="copyAppsScriptCode()" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-copy"></i> Copy Script Code
+              </button>
+            </div>
+            <ol class="list-decimal list-inside space-y-1 text-slate-600 text-[11px]">
+              <li>Open a new <a href="https://sheets.new" target="_blank" class="text-indigo-600 font-semibold underline">Google Sheet</a>.</li>
+              <li>Go to <b>Extensions &gt; Apps Script</b> in the top menu.</li>
+              <li>Paste the copied Apps Script code into <code class="bg-slate-200 px-1 rounded text-slate-800">Code.gs</code>.</li>
+              <li>Click <b>Deploy &gt; New deployment</b>. Choose <b>Web app</b>.</li>
+              <li>Set <b>Who has access</b> to <i>"Anyone"</i>, click <b>Deploy</b>, copy the URL and paste it above!</li>
+            </ol>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="bg-slate-100 border-t border-slate-200 py-3 text-center text-xs text-slate-500 no-print mt-auto">
+    Daily Manpower Roster & Attendance Manager &copy; 2026. All rights reserved.
+  </footer>
+
+<script>
+// ---------------------------------------------------------------------
+// DATABASE INITIALIZATION & LOCALSTORAGE CORE
+// ---------------------------------------------------------------------
+const STORAGE_KEY = "dailyManpowerRoster";
+const GOOGLE_SCRIPT_URL_KEY = "manpowerGoogleScriptUrl";
+
+const DEFAULT_SHIFTS = [
+  { id: 1, code: "M", name: "Morning", start: "06:00", end: "14:00" },
+  { id: 2, code: "G", name: "General", start: "09:00", end: "18:00" },
+  { id: 3, code: "E", name: "Evening", start: "14:00", end: "22:00" },
+  { id: 4, code: "N", name: "Night", start: "22:00", end: "06:00" }
+];
+
+const SAMPLE_EMPLOYEES = [
+  { id: 1, code: "EMP-001", name: "John Doe", department: "Production", designation: "Machine Operator", active: true },
+  { id: 2, code: "EMP-002", name: "Sarah Smith", department: "Production", designation: "Line Supervisor", active: true },
+  { id: 3, code: "EMP-003", name: "Michael Brown", department: "Maintenance", designation: "Technician", active: true },
+  { id: 4, code: "EMP-004", name: "Emily Davis", department: "Quality", designation: "Inspector", active: true },
+  { id: 5, code: "EMP-005", name: "David Wilson", department: "Logistics", designation: "Forklift Driver", active: true }
+];
+
+let db = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null") || {
+  employees: SAMPLE_EMPLOYEES,
+  shifts: DEFAULT_SHIFTS,
+  roster: [],
+  attendance: [],
+  nextEmployeeId: 6,
+  nextShiftId: 5
+};
+
+function saveDB() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------
+// UTILITY FUNCTIONS & HELPERS
+// ---------------------------------------------------------------------
+function showToast(msg, isError = false) {
+  const toast = document.getElementById("toast");
+  const toastMsg = document.getElementById("toastMsg");
+  const toastIcon = document.getElementById("toastIcon");
+
+  toastMsg.textContent = msg;
+  if (isError) {
+    toastIcon.className = "fa-solid fa-circle-exclamation text-red-400 text-base";
+  } else {
+    toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-base";
+  }
+
+  toast.classList.remove("translate-y-20", "opacity-0");
+  setTimeout(() => {
+    toast.classList.add("translate-y-20", "opacity-0");
+  }, 3000);
+}
+
+function getShift(id) {
+  return db.shifts.find(s => s.id === Number(id));
+}
+
+function getShiftByCode(code) {
+  if (!code) return null;
+  return db.shifts.find(s => s.code.toUpperCase() === code.toUpperCase());
+}
+
+function getEmployee(id) {
+  return db.employees.find(e => e.id === Number(id));
+}
+
+function getMonday(d) {
+  d = new Date(d);
+  const day = d.getDay(),
+      diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+function formatShortDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+}
+
+function getBadgeClassForCode(code) {
+  if (!code) return "badge-EMPTY";
+  switch (code.toUpperCase()) {
+    case "M": return "badge-M";
+    case "G": return "badge-G";
+    case "E": return "badge-E";
+    case "N": return "badge-N";
+    case "WO": case "OFF": return "badge-WO";
+    case "L": case "LEAVE": return "badge-LEAVE";
+    default: return "badge-EMPTY";
+  }
+}
+
+// ---------------------------------------------------------------------
+// NAVIGATION & TAB SWITCHING
+// ---------------------------------------------------------------------
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('border-indigo-400', 'text-white');
+    btn.classList.add('border-transparent', 'text-indigo-200');
+  });
+
+  const activeContent = document.getElementById(`content-${tabId}`);
+  const activeTab = document.getElementById(`tab-${tabId}`);
+  
+  if (activeContent && activeTab) {
+    activeContent.classList.remove('hidden');
+    activeTab.classList.remove('border-transparent', 'text-indigo-200');
+    activeTab.classList.add('border-indigo-400', 'text-white');
+  }
+
+  if (tabId === 'daily') renderRoster();
+  if (tabId === 'weekly') renderWeeklyRoster();
+  if (tabId === 'monthly') renderMonthlyMatrix();
+  if (tabId === 'employees') renderEmployees();
+  if (tabId === 'shifts') renderShifts();
+  if (tabId === 'settings') loadGoogleScriptSettings();
+}
+
+// ---------------------------------------------------------------------
+// 1. DAILY ROSTER & ATTENDANCE LOGIC
+// ---------------------------------------------------------------------
+function populateDeptFilter(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const current = select.value;
+  const departments = [...new Set(db.employees.map(e => e.department).filter(Boolean))];
+
+  select.innerHTML = '<option value="">All Departments</option>' +
+    departments.map(d => `<option value="${d}">${d}</option>`).join("");
+
+  select.value = current;
+}
+
+function populateShiftFilter(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const current = select.value;
+
+  select.innerHTML = '<option value="">All Shifts</option>' +
+    db.shifts.map(s => `<option value="${s.id}">${s.code} - ${s.name}</option>`).join("");
+
+  select.value = current;
+}
+
+function renderRoster() {
+  populateDeptFilter("filterDepartment");
+  populateShiftFilter("filterShift");
+
+  const date = document.getElementById("rosterDate").value || today();
+  const department = document.getElementById("filterDepartment").value;
+  const shiftId = document.getElementById("filterShift").value;
+  const status = document.getElementById("filterStatus").value;
+
+  const rows = db.employees
+    .filter(e => e.active && (!department || e.department === department))
+    .map(employee => {
+      const roster = db.roster.find(r => r.employeeId === employee.id && r.date === date);
+      const attendance = db.attendance.find(a => a.employeeId === employee.id && a.date === date);
+      return {
+        employee,
+        roster,
+        attendance,
+        shift: roster && roster.shiftId ? getShift(roster.shiftId) : (roster && roster.shiftCode ? getShiftByCode(roster.shiftCode) : null)
+      };
+    })
+    .filter(row => {
+      if (shiftId && (!row.shift || row.shift.id !== Number(shiftId))) return false;
+      if (status === "NOT_MARKED") return !row.attendance || !row.attendance.status;
+      if (status && (!row.attendance || row.attendance.status !== status)) return false;
+      return true;
+    });
+
+  // Summary Metrics
+  const shiftCounts = {};
+  db.shifts.forEach(s => shiftCounts[s.id] = 0);
+  rows.forEach(row => {
+    if (row.shift && shiftCounts[row.shift.id] !== undefined) {
+      shiftCounts[row.shift.id]++;
+    }
+  });
+
+  const present = rows.filter(r => r.attendance && r.attendance.status === "PRESENT").length;
+  const absent = rows.filter(r => r.attendance && r.attendance.status === "ABSENT").length;
+  const leave = rows.filter(r => r.attendance && r.attendance.status === "LEAVE").length;
+  const assigned = rows.filter(r => r.shift).length;
+
+  document.getElementById("summary").innerHTML = `
+    <div class="bg-indigo-50 border border-indigo-100 p-3 rounded-lg text-center">
+      <span class="block text-xl font-bold text-indigo-900">${rows.length}</span>
+      <span class="text-[11px] font-medium text-indigo-700">Total Staff</span>
+    </div>
+    <div class="bg-emerald-50 border border-emerald-100 p-3 rounded-lg text-center">
+      <span class="block text-xl font-bold text-emerald-900">${present}</span>
+      <span class="text-[11px] font-medium text-emerald-700">Present</span>
+    </div>
+    <div class="bg-red-50 border border-red-100 p-3 rounded-lg text-center">
+      <span class="block text-xl font-bold text-red-900">${absent}</span>
+      <span class="text-[11px] font-medium text-red-700">Absent</span>
+    </div>
+    <div class="bg-amber-50 border border-amber-100 p-3 rounded-lg text-center">
+      <span class="block text-xl font-bold text-amber-900">${leave}</span>
+      <span class="text-[11px] font-medium text-amber-700">On Leave</span>
+    </div>
+    <div class="bg-purple-50 border border-purple-100 p-3 rounded-lg text-center">
+      <span class="block text-xl font-bold text-purple-900">${assigned}</span>
+      <span class="text-[11px] font-medium text-purple-700">Assigned Shift</span>
+    </div>
+    <div class="bg-slate-100 border border-slate-200 p-3 rounded-lg text-center">
+      <span class="block text-xl font-bold text-slate-800">${rows.length - assigned}</span>
+      <span class="text-[11px] font-medium text-slate-600">Unassigned</span>
+    </div>
+  `;
+
+  const tbody = document.getElementById("rosterTableBody");
+  const emptyMsg = document.getElementById("dailyEmptyMsg");
+
+  if (!rows.length) {
+    tbody.innerHTML = "";
+    emptyMsg.classList.remove("hidden");
+    return;
+  }
+  emptyMsg.classList.add("hidden");
+
+  tbody.innerHTML = rows.map(row => {
+    const emp = row.employee;
+    const currentShiftVal = row.shift ? row.shift.id : (row.roster && row.roster.shiftCode ? row.roster.shiftCode : "");
+
+    const shiftOpts = '<option value="">Not Assigned</option>' +
+      db.shifts.map(s => `<option value="${s.id}" ${currentShiftVal == s.id ? "selected" : ""}>${s.code} - ${s.name}</option>`).join("") +
+      `<option value="WO" ${currentShiftVal === "WO" ? "selected" : ""}>WO - Weekly Off</option>` +
+      `<option value="LEAVE" ${currentShiftVal === "LEAVE" ? "selected" : ""}>L - Leave</option>`;
+
+    const attOpts = ["", "PRESENT", "ABSENT", "LEAVE", "WEEKLY_OFF", "HALF_DAY"].map(v => 
+      `<option value="${v}" ${row.attendance && row.attendance.status === v ? "selected" : ""}>${v || "Not Marked"}</option>`
+    ).join("");
+
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="p-3">
+          <div class="font-bold text-slate-800">${emp.name}</div>
+          <div class="text-[11px] text-slate-500 font-mono">${emp.code}</div>
+        </td>
+        <td class="p-3">
+          <div class="text-slate-700">${emp.department || "-"}</div>
+          <div class="text-[11px] text-slate-400">${emp.designation || "-"}</div>
+        </td>
+        <td class="p-3">
+          <select onchange="assignShiftDaily(${emp.id}, this.value)" class="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500">
+            ${shiftOpts}
+          </select>
+        </td>
+        <td class="p-3">
+          <select onchange="markAttendanceDaily(${emp.id}, this.value)" class="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500 ${row.attendance ? 'status-' + row.attendance.status : ''}">
+            ${attOpts}
+          </select>
+        </td>
+        <td class="p-3">
+          <input type="text" value="${row.attendance && row.attendance.remarks ? row.attendance.remarks : ""}" onchange="saveRemarksDaily(${emp.id}, this.value)" placeholder="Add note..." class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500">
+        </td>
+        <td class="p-3 text-center no-print">
+          <button onclick="clearRosterCell(${emp.id}, '${date}')" title="Clear Entry" class="text-slate-400 hover:text-red-600 transition p-1">
+            <i class="fa-solid fa-eraser"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function assignShiftDaily(employeeId, val) {
+  const date = document.getElementById("rosterDate").value || today();
+  let r = db.roster.find(item => item.employeeId === employeeId && item.date === date);
+
+  if (!r) {
+    r = { id: Date.now(), employeeId, date };
+    db.roster.push(r);
+  }
+
+  if (isNaN(val) && val !== "") {
+    r.shiftCode = val;
+    r.shiftId = null;
+  } else {
+    r.shiftId = val ? Number(val) : null;
+    const found = getShift(r.shiftId);
+    r.shiftCode = found ? found.code : null;
+  }
+
+  saveDB();
+  renderRoster();
+}
+
+function markAttendanceDaily(employeeId, status) {
+  const date = document.getElementById("rosterDate").value || today();
+  let a = db.attendance.find(item => item.employeeId === employeeId && item.date === date);
+
+  if (!a) {
+    a = { id: Date.now(), employeeId, date, status: "", remarks: "" };
+    db.attendance.push(a);
+  }
+
+  a.status = status;
+  saveDB();
+  renderRoster();
+}
+
+function saveRemarksDaily(employeeId, remarks) {
+  const date = document.getElementById("rosterDate").value || today();
+  let a = db.attendance.find(item => item.employeeId === employeeId && item.date === date);
+
+  if (!a) {
+    a = { id: Date.now(), employeeId, date, status: "", remarks };
+    db.attendance.push(a);
+  } else {
+    a.remarks = remarks;
+  }
+
+  saveDB();
+}
+
+function clearRosterCell(employeeId, date) {
+  db.roster = db.roster.filter(r => !(r.employeeId === employeeId && r.date === date));
+  db.attendance = db.attendance.filter(a => !(a.employeeId === employeeId && a.date === date));
+  saveDB();
+  renderRoster();
+  showToast("Record cleared for employee");
+}
+
+// ---------------------------------------------------------------------
+// 2. WEEKLY ROSTER PLANNER LOGIC
+// ---------------------------------------------------------------------
+function setThisWeek() {
+  const mon = getMonday(new Date());
+  document.getElementById("weeklyStartDate").value = mon.toISOString().slice(0, 10);
+  renderWeeklyRoster();
+}
+
+function navigateWeek(days) {
+  const current = new Date(document.getElementById("weeklyStartDate").value || today());
+  current.setDate(current.getDate() + days);
+  const mon = getMonday(current);
+  document.getElementById("weeklyStartDate").value = mon.toISOString().slice(0, 10);
+  renderWeeklyRoster();
+}
+
+function renderWeeklyRoster() {
+  populateDeptFilter("weeklyDeptFilter");
+  let startDateVal = document.getElementById("weeklyStartDate").value;
+  if (!startDateVal) {
+    const mon = getMonday(new Date());
+    startDateVal = mon.toISOString().slice(0, 10);
+    document.getElementById("weeklyStartDate").value = startDateVal;
+  }
+
+  const dept = document.getElementById("weeklyDeptFilter").value;
+  const startMon = new Date(startDateVal);
+
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startMon);
+    d.setDate(d.getDate() + i);
+    weekDates.push(d.toISOString().slice(0, 10));
+  }
+
+  // Render Header
+  const header = document.getElementById("weeklyTableHeader");
+  header.innerHTML = `
+    <tr>
+      <th class="p-3 w-48 bg-slate-100 border-r border-slate-200">Employee</th>
+      ${weekDates.map(d => `
+        <th class="p-2 text-center border-r border-slate-200 min-w-[70px]">
+          <div class="text-[11px] font-bold text-slate-700">${new Date(d).toLocaleDateString('en-US', { weekday: 'short' })}</div>
+          <div class="text-[10px] text-slate-500 font-normal">${new Date(d).getDate()} ${new Date(d).toLocaleDateString('en-US', { month: 'short' })}</div>
+        </th>
+      `).join("")}
+      <th class="p-2 text-center w-24">Stats</th>
+    </tr>
+  `;
+
+  const emps = db.employees.filter(e => e.active && (!dept || e.department === dept));
+  const tbody = document.getElementById("weeklyTableBody");
+
+  const dailyShiftTotals = weekDates.map(() => ({ total: 0 }));
+
+  tbody.innerHTML = emps.map(emp => {
+    let assignedCount = 0;
+
+    const cellHtml = weekDates.map((dateStr, idx) => {
+      const roster = db.roster.find(r => r.employeeId === emp.id && r.date === dateStr);
+      let currentVal = "";
+      if (roster) {
+        if (roster.shiftId) {
+          const s = getShift(roster.shiftId);
+          currentVal = s ? s.code : "";
+        } else if (roster.shiftCode) {
+          currentVal = roster.shiftCode;
+        }
+      }
+
+      if (currentVal && currentVal !== "WO" && currentVal !== "LEAVE") {
+        assignedCount++;
+        dailyShiftTotals[idx].total++;
+      }
+
+      const badgeClass = getBadgeClassForCode(currentVal);
+
+      const optionsHtml = '<option value="">-</option>' +
+        db.shifts.map(s => `<option value="${s.code}" ${currentVal === s.code ? "selected" : ""}>${s.code}</option>`).join("") +
+        `<option value="WO" ${currentVal === "WO" ? "selected" : ""}>WO</option>` +
+        `<option value="LEAVE" ${currentVal === "LEAVE" ? "selected" : ""}>L</option>`;
+
+      return `
+        <td class="p-1 text-center border-r border-slate-200">
+          <select onchange="updateMatrixCell(${emp.id}, '${dateStr}', this.value)" class="matrix-cell-select ${badgeClass}">
+            ${optionsHtml}
+          </select>
+        </td>
+      `;
+    }).join("");
+
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2.5 border-r border-slate-200">
+          <div class="font-bold text-slate-800 text-xs">${emp.name}</div>
+          <div class="text-[10px] text-slate-500">${emp.department || "-"}</div>
+        </td>
+        ${cellHtml}
+        <td class="p-2 text-center font-bold text-slate-700 text-xs">
+          ${assignedCount}d
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  // Footer Totals
+  const tfoot = document.getElementById("weeklyTableFooter");
+  tfoot.innerHTML = `
+    <tr>
+      <td class="p-2 border-r border-slate-200 text-xs">Total Staff On Duty</td>
+      ${dailyShiftTotals.map(t => `<td class="p-2 text-center border-r border-slate-200 text-xs text-indigo-900 font-bold">${t.total}</td>`).join("")}
+      <td class="p-2 text-center text-xs text-slate-600">-</td>
+    </tr>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// 3. MONTHLY MATRIX VIEW LOGIC
+// ---------------------------------------------------------------------
+function renderMonthlyMatrix() {
+  populateDeptFilter("monthlyDeptFilter");
+  let ym = document.getElementById("monthlyYearMonth").value;
+  if (!ym) {
+    ym = new Date().toISOString().slice(0, 7);
+    document.getElementById("monthlyYearMonth").value = ym;
+  }
+
+  const dept = document.getElementById("monthlyDeptFilter").value;
+  const [year, month] = ym.split("-").map(Number);
+  const totalDays = new Date(year, month, 0).getDate();
+
+  const dates = [];
+  for (let day = 1; day <= totalDays; day++) {
+    const dStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    dates.push(dStr);
+  }
+
+  // Header
+  const header = document.getElementById("monthlyTableHeader");
+  header.innerHTML = `
+    <tr>
+      <th class="p-2 w-44 bg-slate-100 border-r border-slate-200">Employee</th>
+      ${dates.map(d => {
+        const dayNum = parseInt(d.split("-")[2], 10);
+        const dayName = new Date(d).toLocaleDateString('en-US', { weekday: 'narrow' });
+        const isSun = new Date(d).getDay() === 0;
+        return `
+          <th class="p-1 text-center border-r border-slate-200 min-w-[28px] ${isSun ? 'bg-amber-100/60' : ''}">
+            <div class="text-[9px] font-normal text-slate-500">${dayName}</div>
+            <div class="text-[10px] font-bold text-slate-700">${dayNum}</div>
+          </th>
+        `;
+      }).join("")}
+      <th class="p-1 text-center bg-indigo-50 border-r border-indigo-100 w-10">Work</th>
+      <th class="p-1 text-center bg-slate-100 border-r border-slate-200 w-10">WO</th>
+      <th class="p-1 text-center bg-red-50 border-r border-red-100 w-10">Leave</th>
+    </tr>
+  `;
+
+  const emps = db.employees.filter(e => e.active && (!dept || e.department === dept));
+  const tbody = document.getElementById("monthlyTableBody");
+  const dayDutyTotals = dates.map(() => 0);
+
+  tbody.innerHTML = emps.map(emp => {
+    let workDays = 0;
+    let woDays = 0;
+    let leaveDays = 0;
+
+    const cells = dates.map((dStr, idx) => {
+      const roster = db.roster.find(r => r.employeeId === emp.id && r.date === dStr);
+      let code = "";
+      if (roster) {
+        if (roster.shiftId) {
+          const s = getShift(roster.shiftId);
+          code = s ? s.code : "";
+        } else if (roster.shiftCode) {
+          code = roster.shiftCode;
+        }
+      }
+
+      if (code === "WO") woDays++;
+      else if (code === "LEAVE" || code === "L") leaveDays++;
+      else if (code) {
+        workDays++;
+        dayDutyTotals[idx]++;
+      }
+
+      const badgeClass = getBadgeClassForCode(code);
+      const isSun = new Date(dStr).getDay() === 0;
+
+      const optsHtml = '<option value="">-</option>' +
+        db.shifts.map(s => `<option value="${s.code}" ${code === s.code ? "selected" : ""}>${s.code}</option>`).join("") +
+        `<option value="WO" ${code === "WO" ? "selected" : ""}>WO</option>` +
+        `<option value="LEAVE" ${code === "LEAVE" ? "selected" : ""}>L</option>`;
+
+      return `
+        <td class="p-0.5 text-center border-r border-slate-200 ${isSun ? 'bg-amber-50/40' : ''}">
+          <select onchange="updateMatrixCell(${emp.id}, '${dStr}', this.value)" class="matrix-cell-select ${badgeClass}">
+            ${optsHtml}
+          </select>
+        </td>
+      `;
+    }).join("");
+
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2 border-r border-slate-200">
+          <div class="font-bold text-slate-800 text-xs truncate max-w-[150px]">${emp.name}</div>
+          <div class="text-[9px] text-slate-400 truncate">${emp.code}</div>
+        </td>
+        ${cells}
+        <td class="p-1 text-center font-bold text-indigo-900 bg-indigo-50/40 border-r border-indigo-100">${workDays}</td>
+        <td class="p-1 text-center font-bold text-slate-700 bg-slate-50 border-r border-slate-200">${woDays}</td>
+        <td class="p-1 text-center font-bold text-red-700 bg-red-50/40 border-r border-red-100">${leaveDays}</td>
+      </tr>
+    `;
+  }).join("");
+
+  // Footer
+  const tfoot = document.getElementById("monthlyTableFooter");
+  tfoot.innerHTML = `
+    <tr>
+      <td class="p-2 border-r border-slate-200 text-xs font-bold text-slate-700">Daily Coverage</td>
+      ${dayDutyTotals.map(t => `<td class="p-1 text-center border-r border-slate-200 text-[10px] text-indigo-900 font-bold">${t}</td>`).join("")}
+      <td colspan="3" class="bg-slate-100"></td>
+    </tr>
+  `;
+}
+
+function updateMatrixCell(employeeId, dateStr, codeVal) {
+  let r = db.roster.find(item => item.employeeId === employeeId && item.date === dateStr);
+
+  if (!r) {
+    if (!codeVal) return;
+    r = { id: Date.now(), employeeId, date: dateStr };
+    db.roster.push(r);
+  }
+
+  if (!codeVal) {
+    db.roster = db.roster.filter(item => !(item.employeeId === employeeId && item.date === dateStr));
+  } else {
+    const shift = getShiftByCode(codeVal);
+    if (shift) {
+      r.shiftId = shift.id;
+      r.shiftCode = shift.code;
+    } else {
+      r.shiftId = null;
+      r.shiftCode = codeVal;
+    }
+  }
+
+  saveDB();
+  
+  // Refresh active matrix tab
+  const activeTab = document.querySelector('.tab-btn.border-indigo-400').id;
+  if (activeTab === 'tab-weekly') renderWeeklyRoster();
+  if (activeTab === 'tab-monthly') renderMonthlyMatrix();
+}
+
+// ---------------------------------------------------------------------
+// 4. EMPLOYEES MANAGEMENT LOGIC
+// ---------------------------------------------------------------------
+function renderEmployees() {
+  const tbody = document.getElementById("employeeTableBody");
+  document.getElementById("empCountBadge").textContent = `Total: ${db.employees.length}`;
+
+  tbody.innerHTML = db.employees.map(emp => `
+    <tr class="hover:bg-slate-50">
+      <td class="p-3 font-mono font-semibold text-slate-700">${emp.code}</td>
+      <td class="p-3 font-bold text-slate-800">${emp.name}</td>
+      <td class="p-3 text-slate-600">${emp.department || "-"}</td>
+      <td class="p-3 text-slate-600">${emp.designation || "-"}</td>
+      <td class="p-3 text-center space-x-1">
+        <button onclick="editEmployee(${emp.id})" class="text-indigo-600 hover:text-indigo-900 font-semibold text-xs px-2 py-1 rounded bg-indigo-50 border border-indigo-100">
+          Edit
+        </button>
+        <button onclick="deleteEmployee(${emp.id})" class="text-red-600 hover:text-red-900 font-semibold text-xs px-2 py-1 rounded bg-red-50 border border-red-100">
+          Delete
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function handleSaveEmployee(e) {
+  e.preventDefault();
+  const id = document.getElementById("empEditId").value;
+  const code = document.getElementById("empCode").value.trim();
+  const name = document.getElementById("empName").value.trim();
+  const department = document.getElementById("empDepartment").value.trim();
+  const designation = document.getElementById("empDesignation").value.trim();
+
+  const dup = db.employees.find(emp => emp.code.toLowerCase() === code.toLowerCase() && emp.id !== Number(id));
+  if (dup) {
+    showToast("Employee Code already exists!", true);
+    return;
+  }
+
+  if (id) {
+    const emp = getEmployee(id);
+    if (emp) {
+      emp.code = code;
+      emp.name = name;
+      emp.department = department;
+      emp.designation = designation;
+    }
+    showToast("Employee updated successfully");
+  } else {
+    db.employees.push({
+      id: db.nextEmployeeId++,
+      code,
+      name,
+      department,
+      designation,
+      active: true
+    });
+    showToast("New employee added");
+  }
+
+  saveDB();
+  resetEmployeeForm();
+  renderEmployees();
+}
+
+function editEmployee(id) {
+  const emp = getEmployee(id);
+  if (!emp) return;
+  document.getElementById("empEditId").value = emp.id;
+  document.getElementById("empCode").value = emp.code;
+  document.getElementById("empName").value = emp.name;
+  document.getElementById("empDepartment").value = emp.department || "";
+  document.getElementById("empDesignation").value = emp.designation || "";
+
+  document.getElementById("empFormTitle").textContent = "Edit Employee";
+  document.getElementById("saveEmpBtn").textContent = "Update Employee";
+}
+
+function resetEmployeeForm() {
+  document.getElementById("empEditId").value = "";
+  document.getElementById("empCode").value = "";
+  document.getElementById("empName").value = "";
+  document.getElementById("empDepartment").value = "";
+  document.getElementById("empDesignation").value = "";
+
+  document.getElementById("empFormTitle").textContent = "Add New Employee";
+  document.getElementById("saveEmpBtn").textContent = "Save Employee";
+}
+
+function deleteEmployee(id) {
+  if (!confirm("Are you sure you want to delete this employee?")) return;
+  db.employees = db.employees.filter(e => e.id !== Number(id));
+  db.roster = db.roster.filter(r => r.employeeId !== Number(id));
+  db.attendance = db.attendance.filter(a => a.employeeId !== Number(id));
+  saveDB();
+  renderEmployees();
+  showToast("Employee deleted");
+}
+
+function downloadEmployeeTemplate() {
+  const sample = [
+    { Code: "EMP-101", Name: "Robert Fox", Department: "Production", Designation: "Technician" },
+    { Code: "EMP-102", Name: "Jane Cooper", Department: "Quality", Designation: "Engineer" }
+  ];
+  const ws = XLSX.utils.json_to_sheet(sample);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Employees");
+  XLSX.writeFile(wb, "Employee_Import_Template.xlsx");
+}
+
+function importEmployeesExcel() {
+  const fileInput = document.getElementById("employeeExcelFile");
+  if (!fileInput.files.length) {
+    showToast("Please choose an Excel file first", true);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    let count = 0;
+    rows.forEach(r => {
+      const code = (r.Code || r["Employee Code"] || r.code || "").toString().trim();
+      const name = (r.Name || r["Full Name"] || r.name || "").toString().trim();
+      const department = (r.Department || r.department || "").toString().trim();
+      const designation = (r.Designation || r.designation || "").toString().trim();
+
+      if (code && name && !db.employees.some(emp => emp.code.toLowerCase() === code.toLowerCase())) {
+        db.employees.push({
+          id: db.nextEmployeeId++,
+          code,
+          name,
+          department,
+          designation,
+          active: true
+        });
+        count++;
+      }
+    });
+
+    saveDB();
+    renderEmployees();
+    showToast(`Successfully imported ${count} new employees`);
+    fileInput.value = "";
+  };
+  reader.readAsArrayBuffer(fileInput.files[0]);
+}
+
+// ---------------------------------------------------------------------
+// 5. SHIFT SETUP LOGIC
+// ---------------------------------------------------------------------
+function renderShifts() {
+  const tbody = document.getElementById("shiftsTableBody");
+  tbody.innerHTML = db.shifts.map(s => `
+    <tr class="hover:bg-slate-50">
+      <td class="p-3">
+        <span class="px-2.5 py-1 rounded border font-bold text-xs ${getBadgeClassForCode(s.code)}">${s.code}</span>
+      </td>
+      <td class="p-3 font-bold text-slate-800">${s.name}</td>
+      <td class="p-3 font-mono text-slate-600">${s.start} - ${s.end}</td>
+      <td class="p-3 text-center space-x-1">
+        <button onclick="editShift(${s.id})" class="text-indigo-600 hover:text-indigo-900 font-semibold text-xs px-2 py-1 rounded bg-indigo-50 border border-indigo-100">
+          Edit
+        </button>
+        <button onclick="deleteShift(${s.id})" class="text-red-600 hover:text-red-900 font-semibold text-xs px-2 py-1 rounded bg-red-50 border border-red-100">
+          Delete
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function handleSaveShift(e) {
+  e.preventDefault();
+  const id = document.getElementById("shiftEditId").value;
+  const code = document.getElementById("shiftCode").value.trim().toUpperCase();
+  const name = document.getElementById("shiftName").value.trim();
+  const start = document.getElementById("shiftStart").value;
+  const end = document.getElementById("shiftEnd").value;
+
+  const dup = db.shifts.find(s => s.code === code && s.id !== Number(id));
+  if (dup) {
+    showToast("Shift Code already exists!", true);
+    return;
+  }
+
+  if (id) {
+    const s = getShift(id);
+    if (s) {
+      s.code = code;
+      s.name = name;
+      s.start = start;
+      s.end = end;
+    }
+    showToast("Shift updated successfully");
+  } else {
+    db.shifts.push({
+      id: db.nextShiftId++,
+      code,
+      name,
+      start,
+      end
+    });
+    showToast("New shift created");
+  }
+
+  saveDB();
+  resetShiftForm();
+  renderShifts();
+}
+
+function editShift(id) {
+  const s = getShift(id);
+  if (!s) return;
+  document.getElementById("shiftEditId").value = s.id;
+  document.getElementById("shiftCode").value = s.code;
+  document.getElementById("shiftName").value = s.name;
+  document.getElementById("shiftStart").value = s.start;
+  document.getElementById("shiftEnd").value = s.end;
+
+  document.getElementById("shiftFormTitle").textContent = "Edit Shift";
+  document.getElementById("saveShiftBtn").textContent = "Update Shift";
+}
+
+function resetShiftForm() {
+  document.getElementById("shiftEditId").value = "";
+  document.getElementById("shiftCode").value = "";
+  document.getElementById("shiftName").value = "";
+  document.getElementById("shiftStart").value = "";
+  document.getElementById("shiftEnd").value = "";
+
+  document.getElementById("shiftFormTitle").textContent = "Create / Edit Shift";
+  document.getElementById("saveShiftBtn").textContent = "Save Shift";
+}
+
+function deleteShift(id) {
+  if (!confirm("Delete shift? Existing assignments will revert to unassigned.")) return;
+  db.shifts = db.shifts.filter(s => s.id !== Number(id));
+  saveDB();
+  renderShifts();
+  showToast("Shift removed");
+}
+
+// ---------------------------------------------------------------------
+// EXPORTS TO EXCEL
+// ---------------------------------------------------------------------
+function exportDailyExcel() {
+  const date = document.getElementById("rosterDate").value || today();
+  const data = db.employees.map(emp => {
+    const roster = db.roster.find(r => r.employeeId === emp.id && r.date === date);
+    const att = db.attendance.find(a => a.employeeId === emp.id && a.date === date);
+    const shift = roster && roster.shiftId ? getShift(roster.shiftId) : null;
+    return {
+      "Employee Code": emp.code,
+      "Employee Name": emp.name,
+      "Department": emp.department || "",
+      "Designation": emp.designation || "",
+      "Date": date,
+      "Shift": shift ? `${shift.code} (${shift.start}-${shift.end})` : (roster && roster.shiftCode ? roster.shiftCode : "Not Assigned"),
+      "Attendance Status": att ? att.status : "NOT_MARKED",
+      "Remarks": att ? att.remarks || "" : ""
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Daily Roster");
+  XLSX.writeFile(wb, `Daily_Roster_${date}.xlsx`);
+}
+
+function exportWeeklyExcel() {
+  const startDateVal = document.getElementById("weeklyStartDate").value || today();
+  const startMon = new Date(startDateVal);
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startMon);
+    d.setDate(d.getDate() + i);
+    weekDates.push(d.toISOString().slice(0, 10));
+  }
+
+  const rows = db.employees.map(emp => {
+    const rowObj = {
+      "Code": emp.code,
+      "Name": emp.name,
+      "Department": emp.department || ""
+    };
+    weekDates.forEach(dStr => {
+      const roster = db.roster.find(r => r.employeeId === emp.id && r.date === dStr);
+      let val = "-";
+      if (roster) {
+        if (roster.shiftId) {
+          const s = getShift(roster.shiftId);
+          val = s ? s.code : "-";
+        } else if (roster.shiftCode) {
+          val = roster.shiftCode;
+        }
+      }
+      rowObj[dStr] = val;
+    });
+    return rowObj;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Weekly Roster");
+  XLSX.writeFile(wb, `Weekly_Roster_${startDateVal}.xlsx`);
+}
+
+function exportMonthlyExcel() {
+  const ym = document.getElementById("monthlyYearMonth").value || new Date().toISOString().slice(0, 7);
+  const [year, month] = ym.split("-").map(Number);
+  const totalDays = new Date(year, month, 0).getDate();
+
+  const dates = [];
+  for (let day = 1; day <= totalDays; day++) {
+    dates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+  }
+
+  const rows = db.employees.map(emp => {
+    const rowObj = {
+      "Code": emp.code,
+      "Name": emp.name,
+      "Department": emp.department || ""
+    };
+    dates.forEach(dStr => {
+      const roster = db.roster.find(r => r.employeeId === emp.id && r.date === dStr);
+      let val = "-";
+      if (roster) {
+        if (roster.shiftId) {
+          const s = getShift(roster.shiftId);
+          val = s ? s.code : "-";
+        } else if (roster.shiftCode) {
+          val = roster.shiftCode;
+        }
+      }
+      rowObj[dStr] = val;
+    });
+    return rowObj;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Monthly Matrix");
+  XLSX.writeFile(wb, `Monthly_Matrix_${ym}.xlsx`);
+}
+
+// ---------------------------------------------------------------------
+// BACKUP & RESTORE DATA LOGIC
+// ---------------------------------------------------------------------
+function downloadBackup() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `manpower-roster-backup-${today()}.json`;
+  link.click();
+}
+
+function restoreBackup() {
+  const fileInput = document.getElementById("restoreFile");
+  if (!fileInput.files.length) {
+    showToast("Select a valid JSON backup file", true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (imported.employees && imported.shifts) {
+        db = imported;
+        saveDB();
+        showToast("Database restored successfully!");
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        showToast("Invalid data structure in JSON backup", true);
+      }
+    } catch (err) {
+      showToast("Error parsing JSON file", true);
+    }
+  };
+  reader.readAsText(fileInput.files[0]);
+}
+
+function clearAllData() {
+  if (!confirm("Warning: This action will permanently erase all local shift records and employee directory. Continue?")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  db = {
+    employees: [],
+    shifts: DEFAULT_SHIFTS,
+    roster: [],
+    attendance: [],
+    nextEmployeeId: 1,
+    nextShiftId: 5
+  };
+  saveDB();
+  showToast("Database cleared");
+  setTimeout(() => location.reload(), 800);
+}
+
+// ---------------------------------------------------------------------
+// GOOGLE SHEETS INTEGRATION LOGIC
+// ---------------------------------------------------------------------
+function loadGoogleScriptSettings() {
+  const savedUrl = localStorage.getItem(GOOGLE_SCRIPT_URL_KEY) || "";
+  document.getElementById("googleScriptUrl").value = savedUrl;
+  const badge = document.getElementById("syncStatusBadge");
+  if (savedUrl) {
+    badge.textContent = "Connected";
+    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300";
+  } else {
+    badge.textContent = "Not Connected";
+    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200";
+  }
+}
+
+function saveGoogleScriptUrl() {
+  const url = document.getElementById("googleScriptUrl").value.trim();
+  localStorage.setItem(GOOGLE_SCRIPT_URL_KEY, url);
+  loadGoogleScriptSettings();
+  showToast("Google Script URL saved!");
+}
+
+async function syncToGoogleSheets() {
+  const url = localStorage.getItem(GOOGLE_SCRIPT_URL_KEY);
+  if (!url) {
+    showToast("Please save your Google Apps Script Web App URL first", true);
+    return;
+  }
+
+  const syncBtn = document.getElementById("syncBtn");
+  syncBtn.disabled = true;
+  syncBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Syncing...`;
+
+  try {
+    const payload = {
+      action: "syncData",
+      employees: db.employees,
+      shifts: db.shifts,
+      roster: db.roster,
+      attendance: db.attendance
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    showToast("Data synced to Google Sheet successfully!");
+  } catch (err) {
+    showToast("Failed to sync to Google Sheet", true);
+  } finally {
+    syncBtn.disabled = false;
+    syncBtn.innerHTML = `<i class="fa-solid fa-rotate"></i> Sync Data Now`;
+  }
+}
+
+function copyAppsScriptCode() {
+  const code = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (data.action === "syncData") {
+      updateSheet(ss, "Employees", ["ID", "Code", "Name", "Department", "Designation"], data.employees.map(function(emp) {
+        return [emp.id, emp.code, emp.name, emp.department || "", emp.designation || ""];
+      }));
+
+      updateSheet(ss, "Shifts", ["ID", "Code", "Name", "Start", "End"], data.shifts.map(function(s) {
+        return [s.id, s.code, s.name, s.start, s.end];
+      }));
+
+      updateSheet(ss, "Roster", ["ID", "Employee ID", "Date", "Shift Code"], data.roster.map(function(r) {
+        return [r.id, r.employeeId, r.date, r.shiftCode || ""];
+      }));
+
+      updateSheet(ss, "Attendance", ["ID", "Employee ID", "Date", "Status", "Remarks"], data.attendance.map(function(a) {
+        return [a.id, a.employeeId, a.date, a.status || "", a.remarks || ""];
+      }));
+
+      return ContentService.createTextOutput(JSON.stringify({status: "success"})).setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch(error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function updateSheet(ss, sheetName, headers, rows) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+  sheet.clear();
+  sheet.appendRow(headers);
+  if (rows && rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+}`;
+
+  const tempInput = document.createElement("textarea");
+  tempInput.value = code;
+  document.body.appendChild(tempInput);
+  tempInput.select();
+  document.execCommand('copy');
+  document.body.removeChild(tempInput);
+  showToast("Google Apps Script code copied to clipboard!");
+}
+
+// ---------------------------------------------------------------------
+// SYSTEM INITIALIZATION ON DOM CONTENT LOADED
+// ---------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("rosterDate").value = today();
+  setThisWeek();
+  switchTab("daily");
+});
+</script>
+</body>
+</html>
